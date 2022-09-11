@@ -17,8 +17,15 @@ import torchvision
 
 df = pd.read_csv(r"D:\python\Pytorch_HIC\CIFAR-10_renamed\annotations.csv")
 
+
 train_set, test_set = train_test_split(df, test_size=0.25)
 
+lineages = [['object', 'driving', 'truck'], ['object', 'driving', 'automobile'],
+            ['object', 'not', 'ship'], ['object', 'not', 'airplane'], ['animal', 'mammal', 'deer'],
+            ['animal', 'mammal', 'dog'], ['animal', 'mammal', 'cat'], ['animal', 'mammal', 'horse'],
+            ['animal', 'other', 'frog'], ['animal', 'other', 'bird']]
+
+batch_size = 4
 
 
 class ImageDataset(Dataset):
@@ -27,6 +34,7 @@ class ImageDataset(Dataset):
         self.transform = transform
         self.folder = folder
         self.image_names = self.csv[:]['id']
+        self.lineages = self.csv[:]['lineage']
         self.labels = np.array(self.csv.drop(['id', 'lineage'], axis=1))
 
     def __len__(self):
@@ -38,8 +46,9 @@ class ImageDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = self.transform(image)
         targets = self.labels[index]
+        lineages = self.lineages
 
-        sample = {'image': image, 'labels': targets}
+        sample = {'image': image, 'lineages': lineages, 'labels': targets}
 
         return sample
 
@@ -57,6 +66,13 @@ train_dataloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True)
 test_dataloader = DataLoader(test_dataset, batch_size=batchsize, shuffle=True)
 
 
+
+# get some random training images
+sample = next(iter(train_dataloader))
+images = sample['image']
+
+labels = sample['labels']
+
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -67,17 +83,11 @@ def imshow(img):
     plt.show()
 
 
-# get some random training images
-dataiter = iter(train_dataloader)
-images, labels = next(dataiter)
 
 # show images
 imshow(torchvision.utils.make_grid(images))
 
-
-
-# print labels
-print(' '.join(f'{classes[labels[j]]:5s}' for j in range(batch_size)))
+print(' '.join(f'{lineages[labels[j]]:5s}' for j in range(batch_size)))
 # define network architecture
 
 # define loss function and optimizer
