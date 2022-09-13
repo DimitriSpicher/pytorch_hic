@@ -9,9 +9,10 @@ from sklearn.model_selection import train_test_split
 import numpy as np
 import cv2
 from torch.utils.data import DataLoader, Dataset
-import torchvision.transforms as transforms
 import os
+import torch
 import torchvision
+import torchvision.transforms as transforms
 
 # define data loader
 
@@ -25,8 +26,7 @@ lineages = [['object', 'driving', 'truck'], ['object', 'driving', 'automobile'],
             ['animal', 'mammal', 'dog'], ['animal', 'mammal', 'cat'], ['animal', 'mammal', 'horse'],
             ['animal', 'other', 'frog'], ['animal', 'other', 'bird']]
 
-batch_size = 4
-
+batchsize = 4
 
 class ImageDataset(Dataset):
     def __init__(self, csv, image_folder, transform):
@@ -46,9 +46,7 @@ class ImageDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image = self.transform(image)
         targets = self.labels[index]
-        lineages = self.lineages
-
-        sample = {'image': image, 'lineages': lineages, 'labels': targets}
+        sample = {'image': image, 'labels': targets}
 
         return sample
 
@@ -57,7 +55,7 @@ transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5
 
 folder = r"D:\python\Pytorch_HIC\CIFAR-10_renamed\image_folder"
 
-batchsize = 4
+
 
 train_dataset = ImageDataset(train_set, folder, transform)
 test_dataset = ImageDataset(test_set, folder, transform)
@@ -70,8 +68,9 @@ test_dataloader = DataLoader(test_dataset, batch_size=batchsize, shuffle=True)
 # get some random training images
 sample = next(iter(train_dataloader))
 images = sample['image']
-
 labels = sample['labels']
+labels = labels.type(torch.float32)
+
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -83,17 +82,68 @@ def imshow(img):
     plt.show()
 
 
-
 # show images
 imshow(torchvision.utils.make_grid(images))
 
-print(' '.join(f'{lineages[labels[j]]:5s}' for j in range(batch_size)))
 # define network architecture
+import torch.nn as nn
+import torch.nn.functional as F
 
+
+class Net(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 16)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+
+net = Net()
 # define loss function and optimizer
 
-# training loop
+import torch.optim as optim
+# replace with custom loss later
+criterion = nn.MSELoss()
+optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
+# training loop
+for epoch in range(2):  # loop over the dataset multiple times
+
+    running_loss = 0.0
+    for i, data in enumerate(train_dataloader, 0):
+        # get the inputs; data is a list of [inputs, labels]
+        inputs = data['image']
+        labels = data['labels']
+        labels = labels.type(torch.float32)
+
+        # zero the parameter gradients
+        optimizer.zero_grad()
+
+        # forward + backward + optimize
+        outputs = net(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+
+        # print statistics
+        running_loss += loss.item()
+        if i % 2000 == 1999:    # print every 2000 mini-batches
+            print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
+            running_loss = 0.0
+
+print('Finished Training')
 # prediction
 
 # quality metrics
