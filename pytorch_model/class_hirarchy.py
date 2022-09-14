@@ -69,21 +69,7 @@ test_dataloader = DataLoader(test_dataset, batch_size=batchsize, shuffle=True)
 sample = next(iter(train_dataloader))
 images = sample['image']
 labels = sample['labels']
-labels = labels.type(torch.float32)
 
-
-import matplotlib.pyplot as plt
-import numpy as np
-
-def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
-    plt.show()
-
-
-# show images
-imshow(torchvision.utils.make_grid(images))
 
 # define network architecture
 import torch.nn as nn
@@ -114,12 +100,18 @@ net = Net()
 # define loss function and optimizer
 
 import torch.optim as optim
-# replace with custom loss later
-criterion = nn.MSELoss()
+# replace with custom loss function
+scaling_vector = torch.tensor(np.concatenate((np.array([3, 3, 2, 2, 2, 2]), np.repeat(1, repeats=10))))
+
+def scaled_loss(output, target, scaling_vector):
+    loss = torch.mean(((output - target)*scaling_vector)**2)
+    return loss
+
+
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 # training loop
-for epoch in range(2):  # loop over the dataset multiple times
+for epoch in range(1):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(train_dataloader, 0):
@@ -133,7 +125,7 @@ for epoch in range(2):  # loop over the dataset multiple times
 
         # forward + backward + optimize
         outputs = net(inputs)
-        loss = criterion(outputs, labels)
+        loss = scaled_loss(outputs, labels, scaling_vector)
         loss.backward()
         optimizer.step()
 
@@ -144,6 +136,29 @@ for epoch in range(2):  # loop over the dataset multiple times
             running_loss = 0.0
 
 print('Finished Training')
-# prediction
+
+
+
+# prediction give error per hirarchy step
+outputs = net(images)
+
+correct = 0
+total = 0
+# since we're not training, we don't need to calculate the gradients for our outputs
+with torch.no_grad():
+    for data in test_dataloader:
+        images, labels = data
+        # calculate outputs by running images through the network
+        outputs = net(images)
+        # setting a threshold for the energy, so we can compare to the labels
+
+        #splitting the outputs into the hirarchy steps and check for each step if the prediction is correct
+
+
+
+
+print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
+
+# prepare to count predictions for each class
 
 # quality metrics
