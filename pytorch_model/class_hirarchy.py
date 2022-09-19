@@ -1,8 +1,3 @@
-# thoughts
-# the class is represented as a tree. ech instance has a certain lineage in that tree
-# the tree gets flattend into a vector to calculate loss. Multipl loss vector with a scaling vector
-# to make earlier nodes more important maybe not needed.
-
 # import stuff
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -13,23 +8,13 @@ import os
 import torch
 import torchvision
 import torchvision.transforms as transforms
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 
-# define data loader
-
-df = pd.read_csv(r"D:\python\Pytorch_HIC\CIFAR-10_renamed\annotations.csv")
-
-
-train_set, test_set = train_test_split(df, test_size=0.25)
-
-lineages = [['object', 'driving', 'truck'], ['object', 'driving', 'automobile'],
-            ['object', 'not', 'ship'], ['object', 'not', 'airplane'], ['animal', 'mammal', 'deer'],
-            ['animal', 'mammal', 'dog'], ['animal', 'mammal', 'cat'], ['animal', 'mammal', 'horse'],
-            ['animal', 'other', 'frog'], ['animal', 'other', 'bird']]
-
-batchsize = 4
 
 class ImageDataset(Dataset):
-    def __init__(self, csv, image_folder, transform):
+    def __init__(self, csv, folder, transform):
         self.csv = csv
         self.transform = transform
         self.folder = folder
@@ -49,31 +34,6 @@ class ImageDataset(Dataset):
         sample = {'image': image, 'labels': targets}
 
         return sample
-
-
-transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-
-folder = r"D:\python\Pytorch_HIC\CIFAR-10_renamed\image_folder"
-
-
-
-train_dataset = ImageDataset(train_set, folder, transform)
-test_dataset = ImageDataset(test_set, folder, transform)
-
-train_dataloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=batchsize, shuffle=True)
-
-
-
-# get some random training images
-sample = next(iter(train_dataloader))
-images = sample['image']
-labels = sample['labels']
-
-
-# define network architecture
-import torch.nn as nn
-import torch.nn.functional as F
 
 
 class Net(nn.Module):
@@ -96,22 +56,48 @@ class Net(nn.Module):
         return x
 
 
-net = Net()
-# define loss function and optimizer
-
-import torch.optim as optim
-# replace with custom loss function
-scaling_vector = torch.tensor(np.concatenate((np.array([3, 3, 2, 2, 2, 2]), np.repeat(1, repeats=10))))
-
 def scaled_loss(output, target, scaling_vector):
     loss = torch.mean(((output - target)*scaling_vector)**2)
     return loss
 
 
+def convert_label_to_class_index(target):
+
+    # class structure hardcoded for now
+    class_0_index = target[:, 0:2].argmax(dim=1)
+    class_1_index = target[:, 2:6].argmax(dim=1)
+    class_2_index = target[:, 6:17].argmax(dim=1)
+
+    return class_0_index, class_1_index, class_2_index
+
+
+df = pd.read_csv(r"D:\python\Pytorch_HIC\CIFAR-10_renamed\annotations.csv")
+folder = r"D:\python\Pytorch_HIC\CIFAR-10_renamed\image_folder"
+
+train_set, test_set = train_test_split(df, test_size=0.25)
+
+class_0 = ['object', 'animal']
+class_1 = ['driving', 'not', 'mammal', 'other']
+class_2 = ['truck', 'automobile', 'ship', 'airplane', 'deer', 'dog', 'cat', 'horse', 'frog', 'bird']
+
+batchsize = 4
+
+transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+
+train_dataset = ImageDataset(train_set, folder, transform)
+test_dataset = ImageDataset(test_set, folder, transform)
+
+train_dataloader = DataLoader(train_dataset, batch_size=batchsize, shuffle=True)
+test_dataloader = DataLoader(test_dataset, batch_size=batchsize, shuffle=True)
+
+net = Net()
+
+scaling_vector = torch.tensor(np.concatenate((np.array([3, 3, 2, 2, 2, 2]), np.repeat(1, repeats=10))))
+
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 # training loop
-for epoch in range(1):  # loop over the dataset multiple times
+for epoch in range(4):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(train_dataloader, 0):
@@ -137,28 +123,29 @@ for epoch in range(1):  # loop over the dataset multiple times
 
 print('Finished Training')
 
+# count predictions for each class
+correct_class_0 = 0
+correct_class_1 = 0
+correct_class_2 = 0
+total = test_dataset.__len__()
 
-
-# prediction give error per hirarchy step
-outputs = net(images)
-
-correct = 0
-total = 0
 # since we're not training, we don't need to calculate the gradients for our outputs
 with torch.no_grad():
     for data in test_dataloader:
-        images, labels = data
+        labels = data['labels']
+        image = data['image']
         # calculate outputs by running images through the network
-        outputs = net(images)
-        # setting a threshold for the energy, so we can compare to the labels
+        outputs = net(image)
 
-        #splitting the outputs into the hirarchy steps and check for each step if the prediction is correct
+        index_0_ground, index_1_ground, index_2_ground = convert_label_to_class_index(labels)
 
+        index_0_predicted, index_1_predicted, index_2_predicted = convert_label_to_class_index(outputs)
+        correct_class_0 += torch.sum(index_0_predicted == index_0_ground)
+        correct_class_1 += torch.sum(index_1_predicted == index_1_ground)
+        correct_class_2 += torch.sum(index_2_predicted == index_2_ground)
 
+print(f'Accuracy of the network for class 0: {100 * correct_class_0 // total} %')
+print(f'Accuracy of the network for class 1: {100 * correct_class_1 // total} %')
+print(f'Accuracy of the network for class 2: {100 * correct_class_2 // total} %')
 
-
-print(f'Accuracy of the network on the 10000 test images: {100 * correct // total} %')
-
-# prepare to count predictions for each class
-
-# quality metrics
+# quality metrics comparison to single class network needed
