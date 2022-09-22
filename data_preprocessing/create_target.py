@@ -1,5 +1,9 @@
 import os
 
+# this scripts takes the images from separate folders, moves them into one folder and
+# concatenates the subfolder name to the image
+
+
 def rename_file(image_path):
     split = os.path.split(image_path)
     new_name = f'{split[0]}_{split[1]}'

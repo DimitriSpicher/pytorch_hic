@@ -1,8 +1,9 @@
-# in test and train folder create csv file with path class and annotation
 import os
 import pandas as pd
 import numpy as np
 
+# this script takes the images from the target folder and produces a csv file with the annotations.
+# The CSV file is later used, to split the data and to load the images.
 
 def create_annotation(lineage, categories):
     target_vector = []

@@ -1,4 +1,3 @@
-# import stuff
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import numpy as np
@@ -6,11 +5,18 @@ import cv2
 from torch.utils.data import DataLoader, Dataset
 import os
 import torch
-import torchvision
 import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+
+# this script implements a convolution neural network based on the CIFAR-10 dataset. It is based on a
+# standard classification network found here https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+# I have extended the network to handle 3 classes per image which are organised as lineages. For example a truck would
+# have the lineage (object-driving-truck)
+# I defined a custom loss function to scale the loss for mistakes earlier in the lineage.
+
+# defining the Dataset class which is used to load the data.
 
 
 class ImageDataset(Dataset):
@@ -35,6 +41,8 @@ class ImageDataset(Dataset):
 
         return sample
 
+# defining the neural network structure. This is based on an example that was extended to classify 16 classes
+
 
 class Net(nn.Module):
     def __init__(self):
@@ -55,6 +63,8 @@ class Net(nn.Module):
         x = self.fc3(x)
         return x
 
+# custom loss function that scales the loss accordign to the hirarchy of the class
+
 
 def scaled_loss(output, target, scaling_vector):
     loss = torch.mean(((output - target)*scaling_vector)**2)
@@ -63,7 +73,7 @@ def scaled_loss(output, target, scaling_vector):
 
 def convert_label_to_class_index(target):
 
-    # class structure hardcoded for now
+    # the class hierarchy structure this is hardcoded for now
     class_0_index = target[:, 0:2].argmax(dim=1)
     class_1_index = target[:, 2:6].argmax(dim=1)
     class_2_index = target[:, 6:17].argmax(dim=1)
@@ -75,6 +85,8 @@ df = pd.read_csv(r"D:\python\Pytorch_HIC\CIFAR-10_renamed\annotations.csv")
 folder = r"D:\python\Pytorch_HIC\CIFAR-10_renamed\image_folder"
 
 train_set, test_set = train_test_split(df, test_size=0.25)
+
+# the classes are structured in 3 hierarchy steps. Each image is classified into belonging to one class for each step
 
 class_0 = ['object', 'animal']
 class_1 = ['driving', 'not', 'mammal', 'other']
@@ -97,25 +109,23 @@ scaling_vector = torch.tensor(np.concatenate((np.array([3, 3, 2, 2, 2, 2]), np.r
 optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
 # training loop
+
 for epoch in range(4):  # loop over the dataset multiple times
 
     running_loss = 0.0
     for i, data in enumerate(train_dataloader, 0):
-        # get the inputs; data is a list of [inputs, labels]
+
         inputs = data['image']
         labels = data['labels']
         labels = labels.type(torch.float32)
 
-        # zero the parameter gradients
         optimizer.zero_grad()
 
-        # forward + backward + optimize
         outputs = net(inputs)
         loss = scaled_loss(outputs, labels, scaling_vector)
         loss.backward()
         optimizer.step()
 
-        # print statistics
         running_loss += loss.item()
         if i % 2000 == 1999:    # print every 2000 mini-batches
             print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
@@ -127,14 +137,15 @@ print('Finished Training')
 correct_class_0 = 0
 correct_class_1 = 0
 correct_class_2 = 0
+
 total = test_dataset.__len__()
 
-# since we're not training, we don't need to calculate the gradients for our outputs
+# Counting the correct classification in each hierarchy step
+
 with torch.no_grad():
     for data in test_dataloader:
         labels = data['labels']
         image = data['image']
-        # calculate outputs by running images through the network
         outputs = net(image)
 
         index_0_ground, index_1_ground, index_2_ground = convert_label_to_class_index(labels)
@@ -144,8 +155,8 @@ with torch.no_grad():
         correct_class_1 += torch.sum(index_1_predicted == index_1_ground)
         correct_class_2 += torch.sum(index_2_predicted == index_2_ground)
 
-print(f'Accuracy of the network for class 0: {100 * correct_class_0 // total} %')
-print(f'Accuracy of the network for class 1: {100 * correct_class_1 // total} %')
-print(f'Accuracy of the network for class 2: {100 * correct_class_2 // total} %')
+print(f'Accuracy of the network for class 0: {100 * correct_class_0/total} %')
+print(f'Accuracy of the network for class 1: {100 * correct_class_1/total} %')
+print(f'Accuracy of the network for class 2: {100 * correct_class_2/total} %')
 
 # quality metrics comparison to single class network needed
